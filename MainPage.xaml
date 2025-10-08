@@ -1,0 +1,82 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             x:Class="BOMS.MainPage"
+             Title="Barista Order Management System">
+
+    <VerticalStackLayout Spacing="20" Padding="30">
+
+        <Label Text="Order Queue" FontSize="24" HorizontalOptions="Center" />
+
+        <!-- Error Simulation Toggle Row -->
+        <Grid ColumnDefinitions="Auto,Auto,Auto" ColumnSpacing="12" VerticalOptions="Center">
+            <Label Grid.Column="0" Text="Simulate Errors:" VerticalOptions="Center" />
+            <Switch Grid.Column="1"
+                    x:Name="ErrorToggle"
+                    IsToggled="True"
+                    OnColor="IndianRed"
+                    ThumbColor="White"
+                    Toggled="OnErrorToggleChanged" />
+            <Label Grid.Column="2"
+                   x:Name="ErrorStatusLabel"
+                   Text="ON"
+                   FontAttributes="Bold"
+                   VerticalOptions="Center"
+                   TextColor="IndianRed" />
+        </Grid>
+
+        <!-- Orders list -->
+        <CollectionView x:Name="OrderList" HeightRequest="360">
+            <CollectionView.ItemTemplate>
+                <DataTemplate>
+                    <Grid Padding="8"
+                          ColumnDefinitions="*,Auto"
+                          RowDefinitions="Auto,Auto"
+                          BackgroundColor="{DynamicResource SecondaryColor}">
+                        <!-- Drink & status -->
+                        <Label Grid.Row="0" Grid.Column="0"
+                               Text="{Binding DrinkType}"
+                               FontAttributes="Bold" />
+                        <HorizontalStackLayout Grid.Row="1" Grid.Column="0" Spacing="8">
+                            <Label Text="Status:" />
+                            <Label Text="{Binding Status}" />
+                            <Label Text="•  Weight:" />
+                            <Label Text="{Binding PrepTimeWeight, StringFormat='{0:F2}'}" />
+                        </HorizontalStackLayout>
+
+                        <!-- Complete button -->
+                        <Button Grid.RowSpan="2" Grid.Column="1"
+                                Text="Complete"
+                                Clicked="OnCompleteOrderClicked"
+                                CommandParameter="{Binding}">
+                            <Button.Triggers>
+                                <!-- Disable and fade when already complete -->
+                                <DataTrigger TargetType="Button"
+                                             Binding="{Binding Status}"
+                                             Value="Complete">
+                                    <Setter Property="IsEnabled" Value="False" />
+                                    <Setter Property="Opacity" Value="0.5" />
+                                </DataTrigger>
+                            </Button.Triggers>
+                        </Button>
+
+                        <!-- Optional: subtle visual for completed items -->
+                        <Grid.Triggers>
+                            <DataTrigger TargetType="Grid"
+                                         Binding="{Binding Status}"
+                                         Value="Complete">
+                                <Setter Property="BackgroundColor" Value="#EEF6EE" />
+                            </DataTrigger>
+                        </Grid.Triggers>
+                    </Grid>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+
+        <HorizontalStackLayout Spacing="12">
+            <Button Text="Add Mock Order" Clicked="OnAddOrderClicked" />
+            <Button Text="Prioritize Queue" Clicked="OnPrioritizeClicked" />
+        </HorizontalStackLayout>
+
+    </VerticalStackLayout>
+</ContentPage>

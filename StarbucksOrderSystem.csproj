@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFrameworks>net8.0-maccatalyst</TargetFrameworks>
+    <UseMaui>true</UseMaui>
+
+    <OutputType>Exe</OutputType>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+
+    <ApplicationId>com.fredwilliams.boms</ApplicationId>
+    <RootNamespace>BOMS</RootNamespace>
+    <SingleProject>true</SingleProject>
+  </PropertyGroup>
+
+  <!-- Remove any old EmbeddedResource includes for XAML -->
+  <ItemGroup>
+    <EmbeddedResource Remove="App.xaml" />
+    <EmbeddedResource Remove="MainPage.xaml" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Maui.Controls" Version="8.0.*" />
+    <PackageReference Include="Microsoft.Maui.Controls.Compatibility" Version="8.0.*" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.*" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="8.0.*" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="8.0.*" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <MauiAsset Include="Resources\Raw\**" />
+    <MauiFont Include="Resources\Fonts\*" />
+  </ItemGroup>
+</Project>
