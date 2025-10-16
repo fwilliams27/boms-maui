@@ -1,0 +1,75 @@
+<!doctype html>
+<html>
+<body>
+  <h3>SignalR test</h3>
+  <div>
+    <button id="connectBtn">Connect</button>
+    <button id="joinBtn" disabled>Join group "alpha"</button>
+    <button id="pingBtn" disabled>Send broadcast</button>
+  </div>
+  <pre id="log" style="border:1px solid #ccc; padding:10px; height:300px; overflow:auto;"></pre>
+
+  <!-- Load SignalR browser client from CDN -->
+<script src="/lib/signalr.min.js"></script>
+  <script>
+    const log = (m) => {
+      const el = document.getElementById('log');
+      el.textContent += m + "\n";
+      el.scrollTop = el.scrollHeight;
+    };
+
+    const server = "http://localhost:5246";
+    let conn;
+
+    async function connect() {
+      try {
+        // Force LongPolling to avoid occasional WebSocket/CORS issues from file:// origin
+        conn = new signalR.HubConnectionBuilder()
+          .withUrl(server + "/hubs/network", { transport: signalR.HttpTransportType.LongPolling })
+          .withAutomaticReconnect()
+          .build();
+
+        conn.on("ReceiveNotification", msg => log("[NOTIFY] " + msg));
+        conn.on("ReceiveTelemetry",  p => log("[TELEM]  " + JSON.stringify(p)));
+
+        conn.onreconnecting(err => log("[reconnecting] " + (err?.message || "")));
+        conn.onreconnected(id => log("[reconnected] " + id));
+        conn.onclose(err => log("[closed] " + (err?.message || "")));
+
+        await conn.start();
+        log("Connected to " + server);
+        document.getElementById('joinBtn').disabled = false;
+        document.getElementById('pingBtn').disabled = false;
+      } catch (e) {
+        log("Connect error: " + e);
+      }
+    }
+
+    async function join() {
+      try {
+        await conn.invoke("JoinDeviceGroup", "alpha");
+        log("Joined group: alpha");
+      } catch (e) {
+        log("Join error: " + e);
+      }
+    }
+
+    async function ping() {
+      try {
+        await fetch(server + "/api/broadcast", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ message: "hello from browser" })
+        });
+        log("Broadcast sent");
+      } catch (e) {
+        log("Broadcast error: " + e);
+      }
+    }
+
+    document.getElementById('connectBtn').onclick = connect;
+    document.getElementById('joinBtn').onclick = join;
+    document.getElementById('pingBtn').onclick = ping;
+  </script>
+</body>
+</html>

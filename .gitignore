@@ -1,13 +1,9 @@
-# Build artifacts
 bin/
 obj/
 .vs/
 .vscode/
-
-# macOS
-.DS_Store
-
-# SQLite
-*.db
-*.db3
-*.sqlite
+*.user
+*.suo
+*.DS_Store
+**/Platforms/*/bin/
+**/Platforms/*/obj/
