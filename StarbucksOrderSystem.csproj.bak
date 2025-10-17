@@ -19,8 +19,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="CommunityToolkit.Maui" Version="8.0.0" />
-    <PackageReference Include="LiveChartsCore.SkiaSharpView.Maui" Version="2.0.0-rc6.1" />
     <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="9.0.9" />
     <PackageReference Include="Microsoft.Maui.Controls" Version="8.0.*" />
     <PackageReference Include="Microsoft.Maui.Controls.Compatibility" Version="8.0.*" />
@@ -33,21 +31,4 @@
     <MauiAsset Include="Resources\Raw\**" />
     <MauiFont Include="Resources\Fonts\*" />
   </ItemGroup>
-
-<!-- PATCH START -->
-<PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)'))=='maccatalyst' Or $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)'))=='ios'">
-  <ApplicationId>com.boms.app</ApplicationId>
-  <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
-  <ApplicationVersion>1</ApplicationVersion>
-</PropertyGroup>
-
-<ItemGroup>
-  <!-- Keep the Web API in the repo but DO NOT compile it as part of the MAUI app -->
-  <Compile Remove="NetworkRealtime/**" />
-  <None Include="NetworkRealtime/**" />
-  <!-- Never compile generated files -->
-  <Compile Remove="**/obj/**" />
-</ItemGroup>
-<!-- PATCH END -->
-
 </Project>

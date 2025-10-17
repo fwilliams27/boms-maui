@@ -1,0 +1,15 @@
+<!-- PATCH START -->
+<PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)'))=='maccatalyst' Or $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)'))=='ios'">
+  <ApplicationId>com.boms.app</ApplicationId>
+  <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
+  <ApplicationVersion>1</ApplicationVersion>
+</PropertyGroup>
+
+<ItemGroup>
+  <!-- Keep the Web API in the repo but DO NOT compile it as part of the MAUI app -->
+  <Compile Remove="NetworkRealtime/**" />
+  <None Include="NetworkRealtime/**" />
+  <!-- Never compile generated files -->
+  <Compile Remove="**/obj/**" />
+</ItemGroup>
+<!-- PATCH END -->
