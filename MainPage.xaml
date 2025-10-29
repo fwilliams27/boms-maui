@@ -25,15 +25,30 @@
                    TextColor="IndianRed" />
         </Grid>
 
+        <!-- NEW: non-blocking toast-style status -->
+        <Label x:Name="SeedingLabel"
+               Text="Seeding 100 orders…"
+               IsVisible="False"
+               TextColor="Orange"
+               FontAttributes="Bold"
+               HorizontalOptions="Start" />
+
         <!-- Orders list -->
-        <CollectionView x:Name="OrderList" HeightRequest="360">
+        <CollectionView x:Name="OrderList"
+                        HeightRequest="360"
+                        ItemsSource="{Binding Orders}">
+            <CollectionView.EmptyView>
+                <VerticalStackLayout Padding="12" Spacing="4" HorizontalOptions="Center">
+                    <Label Text="No active orders." FontAttributes="Italic" />
+                    <Label Text="Tap 'Add Mock Order' to create one." FontSize="12" />
+                </VerticalStackLayout>
+            </CollectionView.EmptyView>
+
             <CollectionView.ItemTemplate>
                 <DataTemplate>
                     <Grid Padding="8"
                           ColumnDefinitions="*,Auto"
-                          RowDefinitions="Auto,Auto"
-                          BackgroundColor="{DynamicResource SecondaryColor}">
-                        <!-- Drink & status -->
+                          RowDefinitions="Auto,Auto">
                         <Label Grid.Row="0" Grid.Column="0"
                                Text="{Binding DrinkType}"
                                FontAttributes="Bold" />
@@ -44,13 +59,11 @@
                             <Label Text="{Binding PrepTimeWeight, StringFormat='{0:F2}'}" />
                         </HorizontalStackLayout>
 
-                        <!-- Complete button -->
                         <Button Grid.RowSpan="2" Grid.Column="1"
                                 Text="Complete"
                                 Clicked="OnCompleteOrderClicked"
                                 CommandParameter="{Binding}">
                             <Button.Triggers>
-                                <!-- Disable and fade when already complete -->
                                 <DataTrigger TargetType="Button"
                                              Binding="{Binding Status}"
                                              Value="Complete">
@@ -59,15 +72,6 @@
                                 </DataTrigger>
                             </Button.Triggers>
                         </Button>
-
-                        <!-- Optional: subtle visual for completed items -->
-                        <Grid.Triggers>
-                            <DataTrigger TargetType="Grid"
-                                         Binding="{Binding Status}"
-                                         Value="Complete">
-                                <Setter Property="BackgroundColor" Value="#EEF6EE" />
-                            </DataTrigger>
-                        </Grid.Triggers>
                     </Grid>
                 </DataTemplate>
             </CollectionView.ItemTemplate>

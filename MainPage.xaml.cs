@@ -7,82 +7,133 @@ using BOMS.Data;
 using System.Linq;
 using System.Threading.Tasks;
 using System;
+using Microsoft.Extensions.DependencyInjection; // GetRequiredService
+using Microsoft.EntityFrameworkCore.Infrastructure; // IDbContextFactory
 
 public partial class MainPage : ContentPage
 {
     public ObservableCollection<Order> Orders { get; set; } = new();
 
-    // --- Error simulation config ---
-    private bool _simulateErrors = true;             // bound to the UI toggle
-    private const double BaseErrorRate = 0.05;       // 5% base
-    private const double IncrementPer5Orders = 0.02; // +2% per 5 orders
-    private const double MaxErrorRate = 0.25;        // 25% cap
+    // DbContext factory (replace 'new AppDbContext()' usage)
+    private readonly IDbContextFactory<AppDbContext> _dbFactory;
+
+    // Error simulation config
+    private bool _simulateErrors = true;
+    private const double BaseErrorRate = 0.05;
+    private const double IncrementPer5Orders = 0.02;
+    private const double MaxErrorRate = 0.25;
     private static readonly Random _rng = new();
 
     public MainPage()
     {
         InitializeComponent();
         BindingContext = this;
-        OrderList.ItemsSource = Orders;
 
-        // Seed some orders on first run so the list isn't empty
-        _ = SeedMockOrdersAsync(5);
+        // ✅ Resolve factory from DI container via ServiceHelper
+        _dbFactory = ServiceHelper.Services.GetRequiredService<IDbContextFactory<AppDbContext>>();
+
+        // No auto seeding here; list will reflect DB
+        EnsureStressToolbar();
+    }
+
+    private void EnsureStressToolbar()
+    {
+        if (ToolbarItems.FirstOrDefault(t => t.AutomationId == "stress100") != null)
+            return;
+
+        var stressButton = new ToolbarItem
+        {
+            Text = "Stress (100)",
+            AutomationId = "stress100",
+            Order = ToolbarItemOrder.Primary,
+            Priority = 0,
+            Command = new Command(async () =>
+            {
+                if (SeedingLabel != null) SeedingLabel.IsVisible = true;
+                await RunStressSeedAsync();
+                if (SeedingLabel != null) SeedingLabel.IsVisible = false;
+            })
+        };
+
+        ToolbarItems.Add(stressButton);
+
+#if MACCATALYST
+        Dispatcher.DispatchDelayed(TimeSpan.FromMilliseconds(300), () =>
+        {
+            this.Handler?.UpdateValue(nameof(this.ToolbarItems));
+        });
+#endif
+    }
+
+    protected override async void OnAppearing()
+    {
+        base.OnAppearing();
+        await RefreshFromDbAsync();
+    }
+
+    private async Task RefreshFromDbAsync()
+    {
+        await using var db = await _dbFactory.CreateDbContextAsync();
+
+        var items = await db.Orders
+            .Where(o => !EF.Functions.Like(o.Status, "Complete"))
+            .OrderBy(o => o.PrepTimeWeight)           // 🧩 Ascending (lightest first)
+            .ThenBy(o => o.LastUpdated)
+            .ToListAsync();
+
+        Orders.Clear();
+        foreach (var o in items)
+            Orders.Add(o);
     }
 
     private async void OnAddOrderClicked(object sender, EventArgs e)
     {
-        using var db = new AppDbContext();
+        await using var db = await _dbFactory.CreateDbContextAsync();
         try
         {
-            // Decide whether to simulate an error for this click
             var totalSoFar = await db.Orders.CountAsync();
             var simulateError = _simulateErrors && ShouldSimulateError(totalSoFar);
 
             var drink = MockData.GetRandomDrink();
-            var weight = Math.Clamp(0.8 - drink.Complexity, 0.0, 1.0);
 
             var newOrder = new Order
             {
-                DrinkType = drink.Name,
-                Status = "Pending",
-                PrepTimeWeight = weight
+                DrinkType      = drink.Name,
+                Status         = "Pending",
+                Complexity     = drink.Complexity,
+                PrepTimeWeight = drink.Complexity,
+                CreatedAt      = DateTime.Now,
+                LastUpdated    = DateTime.Now
             };
 
-            // If simulating error, pick which one:
-            // ~50% "Process Failed" (invalid data) or ~50% "Connection Lost" (exception)
             bool planConnectionLoss = false;
             if (simulateError)
             {
                 if (_rng.NextDouble() < 0.5)
-                {
-                    // PROCESS FAILED: make data invalid so validation catches it
                     newOrder.DrinkType = string.Empty;
-                }
                 else
-                {
                     planConnectionLoss = true;
-                }
             }
 
             db.Orders.Add(newOrder);
 
-            // If we plan a connection loss, throw before saving most of the time
             if (planConnectionLoss && _rng.NextDouble() < 0.95)
                 throw new InvalidOperationException("Simulated connection loss");
 
             await db.SaveChangesAsync();
+            await db.Entry(newOrder).ReloadAsync();
 
-            // ✅ Only show valid orders in the visual list
             if (!string.IsNullOrWhiteSpace(newOrder.DrinkType))
             {
                 Orders.Add(newOrder);
                 await DisplayAlert("Order Added",
                     $"{newOrder.DrinkType}\nPriority Weight: {newOrder.PrepTimeWeight:F2}",
                     "OK");
+
+                await RefreshFromDbAsync();
             }
             else
             {
-                // VALIDATION branch (PROCESS FAILED) — log + alert, but do NOT show in list
                 db.AuditLogs.Add(new AuditLog { Event = "Invalid Order (Process Failed)", Timestamp = DateTime.Now });
                 await db.SaveChangesAsync();
                 await DisplayAlert("Error", "Process Failed: Invalid data", "OK");
@@ -90,17 +141,17 @@ public partial class MainPage : ContentPage
         }
         catch (Exception ex)
         {
-            // Catch branch (CONNECTION LOST)
             db.AuditLogs.Add(new AuditLog { Event = $"Connection Lost: {ex.Message}", Timestamp = DateTime.Now });
             await db.SaveChangesAsync();
-            await DisplayAlert("Error", "Connection Lost - Reconnect Attempt", "OK");
+            await DisplayAlert("Error", $"Connection Lost - Reconnect Attempt\n{ex.Message}", "OK");
         }
     }
 
     private void OnPrioritizeClicked(object sender, EventArgs e)
     {
         var sorted = Orders
-            .OrderByDescending(o => o.PrepTimeWeight)
+            .OrderBy(o => o.PrepTimeWeight)           // lightest first
+            .ThenBy(o => o.LastUpdated)
             .ToList();
 
         Orders.Clear();
@@ -108,17 +159,12 @@ public partial class MainPage : ContentPage
             Orders.Add(order);
     }
 
-    /// <summary>
-    /// Mark an order complete (updates DB and UI, logs audit).
-    /// Removes it from the visual list but keeps it in the DB for audit.
-    /// Bound to each row's "Complete" button via CommandParameter.
-    /// </summary>
     private async void OnCompleteOrderClicked(object sender, EventArgs e)
     {
         if (sender is not Button btn || btn.CommandParameter is not Order selected)
             return;
 
-        using var db = new AppDbContext();
+        await using var db = await _dbFactory.CreateDbContextAsync();
         try
         {
             var tracked = await db.Orders.FindAsync(selected.Id);
@@ -131,15 +177,14 @@ public partial class MainPage : ContentPage
             if (string.Equals(tracked.Status, "Complete", StringComparison.OrdinalIgnoreCase))
             {
                 await DisplayAlert("Already Complete", $"Order #{tracked.Id} is already marked complete.", "OK");
-                // Ensure it's not shown in the visual list
                 Orders.Remove(selected);
                 return;
             }
 
             tracked.Status = "Complete";
+            tracked.LastUpdated = DateTime.Now;
             await db.SaveChangesAsync();
 
-            // Write audit log
             db.AuditLogs.Add(new AuditLog
             {
                 Event = $"Order completed: #{tracked.Id} - {tracked.DrinkType}",
@@ -147,22 +192,18 @@ public partial class MainPage : ContentPage
             });
             await db.SaveChangesAsync();
 
-            // ✅ Remove from UI list so barista sees only active work
             Orders.Remove(selected);
+            await RefreshFromDbAsync();
         }
         catch (Exception ex)
         {
             db.AuditLogs.Add(new AuditLog { Event = $"Completion Failed: {ex.Message}", Timestamp = DateTime.Now });
             await db.SaveChangesAsync();
-            await DisplayAlert("Error", "Could not complete order. Please try again.", "OK");
+            await DisplayAlert("Error", $"Could not complete order. Please try again.\n{ex.Message}", "OK");
         }
     }
 
-    /// <summary>
-    /// Toggle handler for the error simulation switch.
-    /// Updates internal flag and colored status label.
-    /// </summary>
-    private void OnErrorToggleChanged(object sender, ToggledEventArgs e)
+    private async void OnErrorToggleChanged(object sender, ToggledEventArgs e)
     {
         _simulateErrors = e.Value;
 
@@ -170,58 +211,60 @@ public partial class MainPage : ContentPage
         {
             ErrorStatusLabel.Text = "ON";
             ErrorStatusLabel.TextColor = Colors.IndianRed;
-            DisplayAlert("Simulation", "Error simulation enabled.", "OK");
+            await DisplayAlert("Simulation", "Error simulation enabled.", "OK");
         }
         else
         {
             ErrorStatusLabel.Text = "OFF";
             ErrorStatusLabel.TextColor = Colors.ForestGreen;
-            DisplayAlert("Simulation", "Error simulation disabled.", "OK");
+            await DisplayAlert("Simulation", "Error simulation disabled. Use the Stress (100) button to run the test.", "OK");
         }
     }
 
-    private async Task SeedMockOrdersAsync(int count)
+    private async Task RunStressSeedAsync()
     {
-        using var db = new AppDbContext();
+        await using var db = await _dbFactory.CreateDbContextAsync();
+        await using var tx = await db.Database.BeginTransactionAsync();
         try
         {
-            if (await db.Orders.AnyAsync()) return;
+            var drinks = MockData.GetRandomDrinkBatch(MockData.DefaultStressBatch);
+            var batch = new System.Collections.Generic.List<Order>(drinks.Count);
 
-            var batch = new System.Collections.Generic.List<Order>();
-            for (int i = 0; i < count; i++)
+            foreach (var d in drinks)
             {
-                var drink = MockData.GetRandomDrink();
-                var weight = Math.Clamp(0.8 - drink.Complexity, 0.0, 1.0);
                 batch.Add(new Order
                 {
-                    DrinkType = drink.Name,
-                    Status = "Pending",
-                    PrepTimeWeight = weight
+                    DrinkType      = d.Name,
+                    Status         = "Pending",
+                    Complexity     = d.Complexity,
+                    PrepTimeWeight = d.Complexity,
+                    CreatedAt      = DateTime.Now,
+                    LastUpdated    = DateTime.Now
                 });
             }
 
             db.Orders.AddRange(batch);
             await db.SaveChangesAsync();
+            await tx.CommitAsync();
 
-            // Add only pending/active to visual list
-            foreach (var o in batch.Where(b => !string.Equals(b.Status, "Complete", StringComparison.OrdinalIgnoreCase)))
-                Orders.Add(o);
+            await RefreshFromDbAsync();
+
+            var total = await db.Orders.CountAsync();
+            await DisplayAlert("Seed Complete", $"Added {batch.Count} orders.\nTotal rows now: {total}.", "OK");
         }
         catch (Exception ex)
         {
-            db.AuditLogs.Add(new AuditLog { Event = $"Seed Failed: {ex.Message}", Timestamp = DateTime.Now });
-            await db.SaveChangesAsync();
-            await DisplayAlert("Warning", "Failed to seed mock orders. Check logs.", "OK");
+            await tx.RollbackAsync();
+            await using var db2 = await _dbFactory.CreateDbContextAsync();
+            db2.AuditLogs.Add(new AuditLog { Event = $"Stress Seed Failed: {ex.Message}", Timestamp = DateTime.Now });
+            await db2.SaveChangesAsync();
+            await DisplayAlert("Error", $"Stress seed failed.\n{ex.Message}", "OK");
         }
     }
 
-    /// <summary>
-    /// Increases error probability as more orders exist, but caps at MaxErrorRate.
-    /// Example: at 0 orders ~5%; at 25 orders => 5% + 5*2% = 15%; capped at 25%.
-    /// </summary>
     private static bool ShouldSimulateError(int totalOrdersInDb)
     {
-        var increments = totalOrdersInDb / 5; // integer division
+        var increments = totalOrdersInDb / 5;
         var p = Math.Min(BaseErrorRate + increments * IncrementPer5Orders, MaxErrorRate);
         return _rng.NextDouble() < p;
     }

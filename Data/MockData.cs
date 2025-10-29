@@ -5,6 +5,9 @@ namespace BOMS.Data
 {
     public static class MockData
     {
+        // NEW: a default batch size you can use for stress tests (tweak as needed)
+        public const int DefaultStressBatch = 100;
+
         public static List<DrinkDefinition> Drinks = new()
         {
             new DrinkDefinition("Brewed Coffee (Pike Place Roast)", 0.2),
@@ -28,12 +31,25 @@ namespace BOMS.Data
         private static readonly Random _rng = new();
 
         /// <summary>
-        /// Returns a random drink definition.
+        /// Returns a single random drink definition.
         /// </summary>
         public static DrinkDefinition GetRandomDrink()
         {
             int index = _rng.Next(Drinks.Count);
             return Drinks[index];
+        }
+
+        /// <summary>
+        /// NEW: Returns a batch of random drink definitions (for stress/perf seeding).
+        /// </summary>
+        public static List<DrinkDefinition> GetRandomDrinkBatch(int count)
+        {
+            var list = new List<DrinkDefinition>(count);
+            for (int i = 0; i < count; i++)
+            {
+                list.Add(GetRandomDrink());
+            }
+            return list;
         }
     }
 

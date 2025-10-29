@@ -1,5 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
+    <!-- Target Mac Catalyst only (as you're running via -f net8.0-maccatalyst) -->
     <TargetFrameworks>net8.0-maccatalyst</TargetFrameworks>
     <UseMaui>true</UseMaui>
 
@@ -7,12 +8,15 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
 
-    <ApplicationId>com.fredwilliams.boms</ApplicationId>
+    <!-- Single, canonical bundle id and title (used by BOTH VS Code and CLI) -->
+    <ApplicationId>com.boms.app</ApplicationId>
+    <ApplicationTitle>StarbucksOrderSystem</ApplicationTitle>
+
     <RootNamespace>BOMS</RootNamespace>
     <SingleProject>true</SingleProject>
   </PropertyGroup>
 
-  <!-- Remove any old EmbeddedResource includes for XAML -->
+  <!-- Remove any old EmbeddedResource includes for XAML (MAUI compiles XAML via MauiXaml) -->
   <ItemGroup>
     <EmbeddedResource Remove="App.xaml" />
     <EmbeddedResource Remove="MainPage.xaml" />
@@ -34,20 +38,19 @@
     <MauiFont Include="Resources\Fonts\*" />
   </ItemGroup>
 
-<!-- PATCH START -->
-<PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)'))=='maccatalyst' Or $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)'))=='ios'">
-  <ApplicationId>com.boms.app</ApplicationId>
-  <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
-  <ApplicationVersion>1</ApplicationVersion>
-</PropertyGroup>
+  <!-- Ensure the same bundle id + version metadata for Catalyst (and iOS if ever added) -->
+  <PropertyGroup Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)'))=='maccatalyst' Or $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)'))=='ios'">
+    <ApplicationId>com.boms.app</ApplicationId>
+    <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
+    <ApplicationVersion>1</ApplicationVersion>
+  </PropertyGroup>
 
-<ItemGroup>
-  <!-- Keep the Web API in the repo but DO NOT compile it as part of the MAUI app -->
-  <Compile Remove="NetworkRealtime/**" />
-  <None Include="NetworkRealtime/**" />
-  <!-- Never compile generated files -->
-  <Compile Remove="**/obj/**" />
-</ItemGroup>
-<!-- PATCH END -->
+  <ItemGroup>
+    <!-- Keep the Web API folder in the repo but DO NOT compile it as part of the MAUI app -->
+    <Compile Remove="NetworkRealtime/**" />
+    <None Include="NetworkRealtime/**" />
 
+    <!-- Never compile generated files -->
+    <Compile Remove="**/obj/**" />
+  </ItemGroup>
 </Project>

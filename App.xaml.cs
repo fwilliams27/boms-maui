@@ -1,27 +1,44 @@
-﻿namespace BOMS;
-
-using Microsoft.Maui.Controls;
+﻿using System.IO;
+using Microsoft.Maui.Storage;
 using BOMS.Data;
+using Microsoft.EntityFrameworkCore;       // ExecuteSqlRaw
+using Microsoft.EntityFrameworkCore.Infrastructure; // IDbContextFactory
+
+namespace BOMS;
 
 public partial class App : Application
 {
-    public App()
+    // Use factory so we don't hold a long-lived context
+    public App(IDbContextFactory<AppDbContext> dbFactory)
     {
         InitializeComponent();
 
-        // Use Shell navigation (make sure you have AppShell.xaml/.cs with x:Class="BOMS.AppShell")
-        MainPage = new AppShell();
+        using var dbContext = dbFactory.CreateDbContext();
 
-        // Ensure the SQLite DB and tables exist (runs once on first launch)
+        // Ensure DB file exists, then upgrade schema if needed
+        dbContext.Database.EnsureCreated();
+        dbContext.EnsureUpToDate();   // add missing columns like Complexity, timestamps, etc.
+
+#if DEBUG
+        // Start with an EMPTY queue in DEBUG (no orders on open)
         try
         {
-            using var db = new AppDbContext();
-            db.Database.EnsureCreated();
+            dbContext.Database.ExecuteSqlRaw("DELETE FROM Orders;");
+            dbContext.Database.ExecuteSqlRaw("DELETE FROM sqlite_sequence WHERE name='Orders';");
         }
-        catch (Exception ex)
+        catch
         {
-            // Surface issues (e.g., path/permissions) so you see them during dev
-            _ = Current?.MainPage?.DisplayAlert("Database init failed", ex.Message, "OK");
+            // non-fatal; continue launching the app
         }
+#endif
+
+        MainPage = new AppShell();
+
+#if DEBUG
+        var dbPath = Path.Combine(FileSystem.AppDataDirectory, "starbucks.db");
+        System.Console.WriteLine($"[BOMS] SQLite path: {dbPath}");
+        MainPage.Dispatcher.Dispatch(async () =>
+            await MainPage.DisplayAlert("SQLite path", dbPath, "OK"));
+#endif
     }
 }
