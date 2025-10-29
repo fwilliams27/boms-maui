@@ -1,5 +1,7 @@
 using BOMS.Services;
+using BOMS.Data;
 using CommunityToolkit.Maui;
+using Microsoft.EntityFrameworkCore;
 
 namespace BOMS;
 
@@ -9,13 +11,12 @@ public static class MauiProgram
     {
         var builder = MauiApp.CreateBuilder();
 
-        // IMPORTANT: Toolkit is chained to UseMauiApp in the same fluent call
         builder
             .UseMauiApp<App>()
             .UseMauiCommunityToolkit()
             .ConfigureFonts(fonts =>
             {
-                // fonts 
+                // fonts
             });
 
         // Base URL for your backend
@@ -26,14 +27,26 @@ public static class MauiProgram
             "http://localhost:5246";
 #endif
 
-        // DI
+        // Dependency Injection (DI)
         builder.Services.AddSingleton<IDispatcher>(Dispatcher.GetForCurrentThread()!);
         builder.Services.AddSingleton(sp => new RealtimeClient(sp.GetRequiredService<IDispatcher>(), baseUrl));
+
+        // ✅ Use factory instead of singleton for AppDbContext
+        builder.Services.AddDbContextFactory<AppDbContext>(options =>
+        {
+            var dbPath = Path.Combine(FileSystem.AppDataDirectory, "starbucks.db");
+            options.UseSqlite($"Data Source={dbPath}");
+        });
 
         // Pages
         builder.Services.AddTransient<BOMS.Pages.TelemetryPage>();
         builder.Services.AddTransient<BOMS.MainPage>();
 
-        return builder.Build();
+        var app = builder.Build();
+
+        // Initialize the ServiceHelper for global service access
+        ServiceHelper.Initialize(app.Services);
+
+        return app;
     }
 }
