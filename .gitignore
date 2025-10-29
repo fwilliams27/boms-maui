@@ -7,3 +7,9 @@ obj/
 *.DS_Store
 **/Platforms/*/bin/
 **/Platforms/*/obj/
+
+# build and local artifacts
+bin/
+obj/
+.DS_Store
+__patch.csproj
