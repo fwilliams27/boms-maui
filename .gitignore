@@ -13,3 +13,6 @@ bin/
 obj/
 .DS_Store
 __patch.csproj
+
+# VS user settings (local only)
+*.csproj.user
